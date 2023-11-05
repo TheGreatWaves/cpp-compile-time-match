@@ -3,3 +3,6 @@ build:
 
 run: build
 	./prog && rm ./prog
+
+mem: build
+	valgrind --leak-check=full -v ./prog && rm ./prog

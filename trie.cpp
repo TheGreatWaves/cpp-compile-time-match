@@ -8,6 +8,7 @@
 namespace detail {
  template <unsigned int>
  struct int_c{};
+ template <bool B> using Specialize=typename std::enable_if<B>::type;
  
 } // namespace detail
 
@@ -42,67 +43,68 @@ namespace ctrie
   {
    return std::get<Index>(std::make_tuple(std::forward<Fns>(fns)...))();
   }
-  // else
-  // {
-  //  return checkTrie(
-  //    TrieNode<Transitions...>(),
-  //    str,
-  //    std::move(fne),
-  //    std::forward<Fns>(fns)...
-  //   );
-  // }
+  else
+  {
+   return checkTrie(
+     TrieNode<Transitions...>(),
+     str,
+     std::move(fne),
+     std::forward<Fns>(fns)...
+    );
+  }
   return fne();
  }
 
  // CHECK.
- // template <typename FnE, typename... Fns>
- // constexpr auto checkTrie(
- //   TrieNode<> trie, 
- //   std::string_view str,
- //   FnE&& fne,
- //   Fns&&... fns)
- // -> decltype(fne())
- // {
- //  return fne();
- // }
+ template <typename FnE, typename... Fns>
+ constexpr auto checkTrie(
+   TrieNode<> trie, 
+   std::string_view str,
+   FnE&& fne,
+   Fns&&... fns)
+ -> decltype(fne())
+ {
+  return fne();
+ }
 
- // template<
- //  typename... Transitions,
- //  typename    FnE,
- //  typename... Fns
- // >
- // constexpr auto checkTrie(
- //   TrieNode<Transitions...> trie,
- //   std::string_view         str,
- //   FnE&&                    fne,
- //   Fns&&...                 fns
- //  ) -> decltype(fne())
- // {
- //  return (!str.empty())
- //       ? Switch(str[0], str.substr(1), trie, std::move(fne), std::forward<Fns>(fns)...)
- //       : fne();
- // }
+ template<
+  typename... Transitions,
+  typename    FnE,
+  typename... Fns
+ >
+ constexpr auto checkTrie(
+   TrieNode<Transitions...> trie,
+   std::string_view         str,
+   FnE&&                    fne,
+   Fns&&...                 fns
+  ) -> decltype(fne())
+ {
+  return (!str.empty())
+       ? Switch(str[0], str.substr(1), trie, std::move(fne), std::forward<Fns>(fns)...)
+       : fne();
+ }
 
 
  // This case is only true when we have exactly one transition.
- // template <
- //  int         Char, // The current character.
- //  typename    Next, // The next node.
- //  typename    FnE,  // The current function.
- //  typename... Fns   // Other functions...
- // >
- // constexpr auto checkTrie(
- //   TrieNode<Transition<Char, Next>> trie,
- //   std::string_view                 str,
- //   FnE&&                            fne,
- //   Fns&&...                         fns
- //  )
- // -> decltype(fne())
- // {
- //  return (!str.empty() && (str[0]==Char))
- //       ? checkTrie(Next(), str.substr(1), std::move(fne), std::forward<Fns>(fns)...) // Keep traversing.
- //       : fne(); // If the string empty, reached the end.
- // }
+ template <
+  int         Char, // The current character.
+  typename    Next, // The next node.
+  typename    FnE,  // The current function.
+  typename... Fns,  // Other functions...
+  typename = detail::Specialize<(Char>=0)>
+ >
+ constexpr auto checkTrie(
+   TrieNode<Transition<Char, Next>> trie,
+   std::string_view                 str,
+   FnE&&                            fne,
+   Fns&&...                         fns
+  )
+ -> decltype(fne())
+ {
+  return (!str.empty() && (str[0]==Char))
+       ? checkTrie(Next(), str.substr(1), std::move(fne), std::forward<Fns>(fns)...) // Keep traversing.
+       : fne(); // If the string empty, reached the end.
+ }
 
 
  namespace help
