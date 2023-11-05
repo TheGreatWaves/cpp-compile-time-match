@@ -285,13 +285,13 @@ constexpr auto makeTrie(nil, FixedString<String0.Size> str)
 
  // An entry.
  template<std::size_t Index, FixedString<1>>
- auto transitionAdd(nil) -> Transition<-1, int_c<Index>>
+ auto transitionAdd(nil = nil()) -> Transition<-1, int_c<Index>>
  { 
   return {}; 
  }
 
  template <std::size_t Index, FixedString String1>
-  auto transitionAdd(nil)
+  auto transitionAdd(nil = nil())
   -> Transition<String1.Head(), TrieNode<decltype(transitionAdd<Index, String1.Tail()>(nil()))>>
  { 
   return {};
@@ -333,8 +333,8 @@ auto main() -> int
   't', 
   "hat is so awesome",
   cpp20trie::TrieNode<
-   decltype(cpp20trie::transitionAdd<0, "hello">(cpp20trie::nil())),
-   decltype(cpp20trie::transitionAdd<1, "that is so awesome">(cpp20trie::nil()))
+   decltype(cpp20trie::transitionAdd<0, "hello">()),
+   decltype(cpp20trie::transitionAdd<1, "that is so awesome">())
   >{},
   []{ return "not found"; },
   []{ return "matched hello"; },
