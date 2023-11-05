@@ -14,7 +14,7 @@ namespace detail {
 
 // https://ctrpeach.io/posts/cpp20-string-literal-template-parameters/
 
-template<std::size_t N>
+template<int N>
 struct FixedString
 {
  constexpr FixedString(const char (&str)[N])
@@ -27,11 +27,11 @@ struct FixedString
   return val[0];
  }
 
- constexpr auto Tail() const -> FixedString<N-1>
+ constexpr auto Tail() const -> FixedString<(N-1)>=0?N-1:0>
  {
-  char newVal[N-1];
-  std::copy_n(&val[1], N-1, newVal);
-  return FixedString<N-1>(newVal);
+  char newVal[(N-1)>=0?N-1:0];
+  std::copy_n(&val[1], (N-1)>=0?N-1:0, newVal);
+  return FixedString<(N-1)>=0?N-1:0>(newVal);
  }
 
  static constexpr std::size_t Size = N;
@@ -92,7 +92,7 @@ namespace cpp20trie
    FnE&& fne,
    Fns&&... fns)
  -> decltype(fne())
- {
+ { 
   return fne();
  }
 
@@ -122,7 +122,7 @@ namespace cpp20trie
   typename... Fns,  // Other functions...
   typename = detail::Specialize<(Char>=0)>
  >
- constexpr auto checkTrie(
+constexpr auto checkTrie(
    TrieNode<Transition<Char, Next>> trie,
    std::string_view                 str,
    FnE&&                            fne,
@@ -195,7 +195,7 @@ namespace cpp20trie
   std::initializer_list<std::size_t> ({
    // Note: std::get<Is>(std::move(chars) -> the character we are interested in.
    static_cast<unsigned long>((index == std::get<Is>(std::move(chars)) 
-   ? (ret = func.template operator()<Is>()  ), 0
+   ? (ret = func.template operator()<Is>()), 0
    : 0))...
   });
   
@@ -275,25 +275,27 @@ template<std::size_t I>
 constexpr TrieNode<> makeTrie(nil) { return {}; }
 
 template <std::size_t I, FixedString String0, FixedString... Strings>
-constexpr auto makeTrie(nil, FixedString<sizeof(String0.val)> str) 
+constexpr auto makeTrie(nil, FixedString<String0.Size> str) 
  -> decltype(trieAdd<I, String0>(makeTrie<I+1>(nil(), Strings...)
  ))
 {
+  std::cout << "Reached tail\n";
   return {};
 }
 
  // An entry.
- template<std::size_t Index>
- constexpr auto transitionAdd(nil, FixedString<0>) -> Transition<-1, int_c<Index>>
- { return {}; }
+ template<std::size_t Index, FixedString<1>>
+ auto transitionAdd(nil) -> Transition<-1, int_c<Index>>
+ { 
+  return {}; 
+ }
 
- // template <std::size_t Index, unsigned char Ch0, unsigned char... Chars>
- // constexpr Transition<Ch0, TrieNode<decltype(
- //  transitionAdd<Index>(nil(), FixedString<>())
- // )>>
- // transitionAdd(nil, )
- // {}
-
+ template <std::size_t Index, FixedString String1>
+  auto transitionAdd(nil)
+  -> Transition<String1.Head(), TrieNode<decltype(transitionAdd<Index, String1.Tail()>(nil()))>>
+ { 
+  return {};
+ }
 
 } // namespace cpp20trie
 
@@ -325,36 +327,19 @@ constexpr auto doTrie(std::string_view str, ArgE&& argE, Args&&... args)
  );
 }
 
-template<FixedString Str>
-void Print() {
-    // The size of the string is available as a constant expression.
-    constexpr auto size = sizeof(Str.val);
-
-    // and so is the string's content.
-    constexpr auto contents = Str.val;
-
-    std::cout << "head: " << Str.Head() << '\n';
-    std::cout << "head: " << Str.Tail().Head() << '\n';
-    std::cout << "head: " << Str.Tail().Tail().Head() << '\n';
-
-    std::cout << "Size: " << size << ", Contents: " << contents << std::endl;
-}
-
 auto main() -> int
 {
- // constexpr auto v = cpp20trie::Switch(
- //  'h', 
- //  "",
- //  cpp20trie::TrieNode<
- //   cpp20trie::Transition<'e', cpp20trie::TrieNode<cpp20trie::Transition<-1, cpp20trie::int_c<0>>>>,
- //   cpp20trie::Transition<'h', cpp20trie::TrieNode<cpp20trie::Transition<-1, cpp20trie::int_c<1>>>>,
- //   cpp20trie::Transition<'x', cpp20trie::TrieNode<cpp20trie::Transition<-1, cpp20trie::int_c<2>>>>
- //  >{},
- //  []{ return "not found"; },
- //  []{ return "matched e"; },
- //  []{ return "matched h"; },
- //  []{ return "matched x"; }
- // );
- // std::cout << "Result: " << v << '\n';
- Print<"H">();
+ constexpr auto v = cpp20trie::Switch(
+  't', 
+  "hat is so awesome",
+  cpp20trie::TrieNode<
+   decltype(cpp20trie::transitionAdd<0, "hello">(cpp20trie::nil())),
+   decltype(cpp20trie::transitionAdd<1, "that is so awesome">(cpp20trie::nil()))
+  >{},
+  []{ return "not found"; },
+  []{ return "matched hello"; },
+  []{ return "that is so awesome"; }
+ );
+
+ std::cout << "Result: " << v << '\n';
 }
