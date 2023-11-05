@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <tuple>
@@ -9,12 +10,40 @@ namespace detail {
  template <unsigned int>
  struct int_c{};
  template <bool B> using Specialize=typename std::enable_if<B>::type;
- 
 } // namespace detail
 
-namespace ctrie 
+// https://ctrpeach.io/posts/cpp20-string-literal-template-parameters/
+
+template<std::size_t N>
+struct FixedString
+{
+ constexpr FixedString(const char (&str)[N])
+ {
+  std::copy_n(str, N, val);
+ }
+
+ constexpr auto Head() const -> const char
+ {
+  return val[0];
+ }
+
+ constexpr auto Tail() const -> FixedString<N-1>
+ {
+  char newVal[N-1];
+  std::copy_n(&val[1], N-1, newVal);
+  return FixedString<N-1>(newVal);
+ }
+
+ static constexpr std::size_t Size = N;
+ char val[N];
+};
+
+
+namespace cpp20trie 
 {
  using detail::int_c;
+
+ struct nil{};
 
  template<int Char, typename Next>
  struct Transition {
@@ -31,7 +60,7 @@ namespace ctrie
   typename     FnE,
   typename...  Fns
  >
- auto checkTrie(
+ constexpr auto checkTrie(
    TrieNode<Transition<-1, int_c<Index>>, Transitions...>,
    std::string_view str, 
    FnE&&            fne,
@@ -105,7 +134,6 @@ namespace ctrie
        ? checkTrie(Next(), str.substr(1), std::move(fne), std::forward<Fns>(fns)...) // Keep traversing.
        : fne(); // If the string empty, reached the end.
  }
-
 
  namespace help
  {
@@ -215,7 +243,7 @@ namespace ctrie
   typename    FnE,
   typename... Fns
  >
- auto Switch(
+ constexpr auto Switch(
   unsigned char ch, 
   std::string_view str, 
   TrieNode<Transitions...> t,
@@ -224,7 +252,6 @@ namespace ctrie
  )
  -> decltype(fne())
  {
-  std::cout << "current character: " << static_cast<std::size_t>(ch) << '\n';
   return switch_impl(
    static_cast<std::size_t>(ch),                          // The current character.
    help::help_me_next(t),
@@ -235,7 +262,40 @@ namespace ctrie
    std::forward<Fns>(fns)...   
   );
  }
-} // namespace detail
+
+template<std::size_t Index, FixedString String, typename... Transitions>
+constexpr auto trieAdd(TrieNode<Transitions...>)
+-> decltype(insertSorted<Index>(nil(), String, TrieNode<>(), Transitions()...))
+{
+ return {}; 
+}
+
+// Making the trie.
+template<std::size_t I>
+constexpr TrieNode<> makeTrie(nil) { return {}; }
+
+template <std::size_t I, FixedString String0, FixedString... Strings>
+constexpr auto makeTrie(nil, FixedString<sizeof(String0.val)> str) 
+ -> decltype(trieAdd<I, String0>(makeTrie<I+1>(nil(), Strings...)
+ ))
+{
+  return {};
+}
+
+ // An entry.
+ template<std::size_t Index>
+ constexpr auto transitionAdd(nil, FixedString<0>) -> Transition<-1, int_c<Index>>
+ { return {}; }
+
+ // template <std::size_t Index, unsigned char Ch0, unsigned char... Chars>
+ // constexpr Transition<Ch0, TrieNode<decltype(
+ //  transitionAdd<Index>(nil(), FixedString<>())
+ // )>>
+ // transitionAdd(nil, )
+ // {}
+
+
+} // namespace cpp20trie
 
 
 
@@ -265,32 +325,36 @@ constexpr auto doTrie(std::string_view str, ArgE&& argE, Args&&... args)
  );
 }
 
+template<FixedString Str>
+void Print() {
+    // The size of the string is available as a constant expression.
+    constexpr auto size = sizeof(Str.val);
+
+    // and so is the string's content.
+    constexpr auto contents = Str.val;
+
+    std::cout << "head: " << Str.Head() << '\n';
+    std::cout << "head: " << Str.Tail().Head() << '\n';
+    std::cout << "head: " << Str.Tail().Tail().Head() << '\n';
+
+    std::cout << "Size: " << size << ", Contents: " << contents << std::endl;
+}
+
 auto main() -> int
 {
- auto v = ctrie::Switch(
-  'x', 
-  "",
-  ctrie::TrieNode<
-   ctrie::Transition<'e', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<0>>>>,
-   ctrie::Transition<'h', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<1>>>>,
-   ctrie::Transition<'x', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<2>>>>
-  >{},
-  []{ return "not found"; },
-  []{ return "matched e"; },
-  []{ return "matched h"; },
-  []{ return "matched x"; }
- );
-
- std::cout << "v: " << v << '\n';
-
- constexpr auto ok = ctrie::help::help_char(ctrie::TrieNode<
-   ctrie::Transition<'e', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<1>>>>,
-   ctrie::Transition<'h', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<0>>>>
-  >{});
-
- std::cout << std::get<0>(ok) << '\n';
- std::cout << static_cast<std::size_t>('e') << '\n';
-
- std::cout << std::get<1>(ok) << '\n';
- std::cout << static_cast<std::size_t>('h') << '\n';
+ // constexpr auto v = cpp20trie::Switch(
+ //  'h', 
+ //  "",
+ //  cpp20trie::TrieNode<
+ //   cpp20trie::Transition<'e', cpp20trie::TrieNode<cpp20trie::Transition<-1, cpp20trie::int_c<0>>>>,
+ //   cpp20trie::Transition<'h', cpp20trie::TrieNode<cpp20trie::Transition<-1, cpp20trie::int_c<1>>>>,
+ //   cpp20trie::Transition<'x', cpp20trie::TrieNode<cpp20trie::Transition<-1, cpp20trie::int_c<2>>>>
+ //  >{},
+ //  []{ return "not found"; },
+ //  []{ return "matched e"; },
+ //  []{ return "matched h"; },
+ //  []{ return "matched x"; }
+ // );
+ // std::cout << "Result: " << v << '\n';
+ Print<"H">();
 }
