@@ -30,7 +30,7 @@ namespace ctrie
   typename     FnE,
   typename...  Fns
  >
- constexpr auto checkTrie(
+ auto checkTrie(
    TrieNode<Transition<-1, int_c<Index>>, Transitions...>,
    std::string_view str, 
    FnE&&            fne,
@@ -107,42 +107,46 @@ namespace ctrie
 
  namespace help
  {
-  template <int Char0, typename Next0, typename... Transitions>
-  constexpr auto help_char(TrieNode<Transition<Char0, Next0>, Transitions...>)
+  template <int Char0, typename Next0>
+  constexpr auto help_char(TrieNode<Transition<Char0, Next0>>)
   {
-   return Char0;
-  }
-
-  template <int Char0, typename Next0, typename... Transitions>
-  constexpr auto help_me_char(TrieNode<Transition<Char0, Next0>, Transitions...>) -> auto
-  {
-   if constexpr (sizeof...(Transitions) > 0)
-   {
-    return std::make_tuple(Char0, help_char(TrieNode<Transitions...>{}));
-   }
    return std::make_tuple(Char0);
   }
 
-  template <int Char0, typename Next0, typename... Transitions>
-  constexpr auto help_next(TrieNode<Transition<Char0, Next0>, Transitions...>)
+  template <int Char0, typename Next0, int Char1, typename Next1, typename... Transitions>
+  constexpr auto help_char(TrieNode<Transition<Char0, Next0>, Transition<Char1, Next1>, Transitions...>)
   {
-   return Next0();
+   return std::tuple_cat(
+    help_char<Char0, Next0>(TrieNode<Transition<Char0, Next0>>()),
+    help_char<Char1, Next1>(TrieNode<Transition<Char1, Next1>, Transitions...>())
+   );
   }
 
-
-  template <
-   int C,
-   typename N,
-   template<int, typename> class Transition, 
-   typename... Transitions
-  >
-  constexpr auto help_me_next(TrieNode<Transition<C, N>, Transitions...> t) -> auto
+  template < typename... Transitions >
+  constexpr auto help_me_char(TrieNode<Transitions...> t)
   {
-   if constexpr (sizeof...(Transitions) > 0)
-   {
-    return std::make_tuple(N(), help_char(TrieNode<Transitions...>{}));
-   }
-   return std::make_tuple(N());
+    return help_char(t);
+  }
+
+  template <int Char0, typename Next0>
+  constexpr auto help_next(TrieNode<Transition<Char0, Next0>>)
+  {
+   return std::make_tuple(Next0());
+  }
+
+  template <int Char0, typename Next0, int Char1, typename Next1, typename... Transitions>
+  constexpr auto help_next(TrieNode<Transition<Char0, Next0>, Transition<Char1, Next1>, Transitions...>)
+  {
+   return std::tuple_cat(
+    help_next<Char0, Next0>(TrieNode<Transition<Char0, Next0>>()),
+    help_next<Char1, Next1>(TrieNode<Transition<Char1, Next1>, Transitions...>())
+   );
+  }
+
+  template < typename... Transitions >
+  constexpr auto help_me_next(TrieNode<Transitions...> t)
+  {
+    return help_next(t);
   }
  };
 
@@ -154,21 +158,16 @@ namespace ctrie
    Function                   func,
    DefaultFunction            def
  )
- -> auto // We don't really care about the type.
+ -> decltype(def()) // We don't really care about the type.
  {
-  using returnType = std::common_type_t<decltype(Is)...>;
-  auto numCases = std::make_index_sequence<sizeof...(Is)>{};
-  bool found = false;
-
-  returnType ret;
+  using returnType = decltype(def());
+  returnType ret = def();
   std::initializer_list<std::size_t> ({
    // Note: std::get<Is>(std::move(chars) -> the character we are interested in.
    static_cast<unsigned long>((index == std::get<Is>(std::move(chars)) 
-   ? (ret = func(Is)), found=true, 0
+   ? (ret = func.template operator()<Is>()  ), 0
    : 0))...
   });
-
-  if (!found) ret = static_cast<returnType>(def());
   
   return ret;
  }
@@ -189,19 +188,22 @@ namespace ctrie
   FnE&&                      fne,
   Fns&&...                   fns
  )
- -> auto
+ -> decltype(fne())
  {
+
+  auto f = [&]<std::size_t I>() -> auto {
+     return checkTrie(
+     std::get<I>(std::move(t)), 
+     str, 
+     fne, 
+     std::forward<Fns>(fns)...);
+  };
+
   return compileSwitch(
     index,
     std::move(is),
     std::move(cs),
-    [&] (auto i) -> auto {
-     return checkTrie(
-     std::get<0>(std::move(t)), 
-     str, 
-     fne, 
-     std::forward<Fns>(fns)...);
-    },
+    std::move(f),
     fne
   );
  }
@@ -220,6 +222,7 @@ namespace ctrie
  )
  -> decltype(fne())
  {
+  std::cout << "current character: " << static_cast<std::size_t>(ch) << '\n';
   return switch_impl(
    static_cast<std::size_t>(ch),                          // The current character.
    help::help_me_next(t),
@@ -230,8 +233,6 @@ namespace ctrie
    std::forward<Fns>(fns)...   
   );
  }
-
-
 } // namespace detail
 
 
@@ -265,21 +266,29 @@ constexpr auto doTrie(std::string_view str, ArgE&& argE, Args&&... args)
 auto main() -> int
 {
  auto v = ctrie::Switch(
-  'h', 
+  'x', 
   "",
   ctrie::TrieNode<
-   ctrie::Transition<'h', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<0>>>>,
-   ctrie::Transition<'e', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<0>>>>
+   ctrie::Transition<'e', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<0>>>>,
+   ctrie::Transition<'h', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<1>>>>,
+   ctrie::Transition<'x', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<2>>>>
   >{},
-  []{ return -1; },
-  []{ return 2; }
+  []{ return "not found"; },
+  []{ return "matched e"; },
+  []{ return "matched h"; },
+  []{ return "matched x"; }
  );
 
  std::cout << "v: " << v << '\n';
 
- // std::cout << "What: " << ctrie::help::help((what)) << '\n';
- // constexpr auto v = ctrie::help::help_me(what);
+ constexpr auto ok = ctrie::help::help_char(ctrie::TrieNode<
+   ctrie::Transition<'e', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<1>>>>,
+   ctrie::Transition<'h', ctrie::TrieNode<ctrie::Transition<-1, ctrie::int_c<0>>>>
+  >{});
 
- // std::cout << std::get<0>(v) << '\n';
- // std::cout << std::get<1>(v) << '\n';
+ std::cout << std::get<0>(ok) << '\n';
+ std::cout << static_cast<std::size_t>('e') << '\n';
+
+ std::cout << std::get<1>(ok) << '\n';
+ std::cout << static_cast<std::size_t>('h') << '\n';
 }
