@@ -25,7 +25,7 @@ struct FixedString
  }
 
  constexpr auto Empty() const -> const bool {
-  return Size == 0;
+  return Size() == 0;
  }
 
  constexpr auto Head() const -> const char
@@ -40,10 +40,37 @@ struct FixedString
   return FixedString<(N-1)>=0?N-1:0>(newVal);
  }
 
- static constexpr std::size_t Size = N;
+ static constexpr std::size_t Size() { return N; };
  char val[N];
 };
 
+template <FixedString String>
+struct string_t;
+
+template <FixedString String, typename T2=void>
+struct string_tail_t{};
+
+template <FixedString String>
+struct string_tail_t<String, detail::Specialize<(String.Size()>1)>>
+{
+ using Type = string_t<String.Tail()>;
+};
+
+template <FixedString String>
+struct string_tail_t<String, detail::Specialize<(String.Size()<=1)>>
+{
+ using Type = void;
+};
+
+template <FixedString String>
+struct string_t 
+{
+static constexpr int Size() { return String.Size(); }
+static const char * Data() { return String.val; } 
+static constexpr char Head() { return String.Head(); }
+static constexpr bool Empty() { return String.Empty(); }
+using Tail = typename string_tail_t<String>::Type;
+};
 
 namespace cpp20trie 
 {
@@ -60,36 +87,6 @@ namespace cpp20trie
   {
   };
 
- template<
-  unsigned int Index,
-  typename...  Transitions,
-  typename     FnE,
-  typename...  Fns
- >
- constexpr auto checkTrie(
-   TrieNode<Transition<-1, int_c<Index>>, Transitions...>,
-   std::string_view str, 
-   FnE&&            fne,
-   Fns&&...         fns
-  )
- -> decltype(fne())
- {
-  if (str.empty())
-  {
-   return std::get<Index>(std::make_tuple(std::forward<Fns>(fns)...))();
-  }
-  else
-  {
-   return checkTrie(
-     TrieNode<Transitions...>(),
-     str,
-     std::move(fne),
-     std::forward<Fns>(fns)...
-    );
-  }
-  return fne();
- }
-
  // CHECK.
  template <typename FnE, typename... Fns>
  constexpr auto checkTrie(
@@ -101,24 +98,6 @@ namespace cpp20trie
  { 
   return fne();
  }
-
- template<
-  typename... Transitions,
-  typename    FnE,
-  typename... Fns
- >
- constexpr auto checkTrie(
-   TrieNode<Transitions...> trie,
-   std::string_view         str,
-   FnE&&                    fne,
-   Fns&&...                 fns
-  ) -> decltype(fne())
- {
-  return (!str.empty())
-       ? Switch(str[0], str.substr(1), trie, std::move(fne), std::forward<Fns>(fns)...)
-       : fne();
- }
-
 
  // This case is only true when we have exactly one transition.
  template <
@@ -140,6 +119,51 @@ constexpr auto checkTrie(
        ? checkTrie(Next(), str.substr(1), std::move(fne), std::forward<Fns>(fns)...) // Keep traversing.
        : fne(); // If the string empty, reached the end.
  }
+
+
+ template<
+  typename... Transitions,
+  typename    FnE,
+  typename... Fns
+ >
+  constexpr auto checkTrie(
+   TrieNode<Transitions...> trie,
+   std::string_view         str,
+   FnE&&                    fne,
+   Fns&&...                 fns
+  ) -> decltype(fne())
+ {
+  return (!str.empty())
+       ? Switch(str[0], str.substr(1), trie, std::move(fne), std::forward<Fns>(fns)...)
+       : fne();
+ }
+
+ template<
+  unsigned int Index,
+  typename...  Transitions,
+  typename     FnE,
+  typename...  Fns
+ >
+ constexpr auto checkTrie(
+   TrieNode<Transition<-1, int_c<Index>>, Transitions...>,
+   std::string_view str, 
+   FnE&&            fne,
+   Fns&&...         fns
+  )
+ -> decltype(fne())
+ {
+  return (str.empty()
+       ? std::get<Index>(std::make_tuple(std::forward<Fns>(fns)...))()
+       : checkTrie(
+          TrieNode<Transitions...>(),
+          std::move(str),
+          std::move(fne),
+          std::forward<Fns>(fns)...
+         ));
+ }
+
+
+
 
 
 
@@ -246,58 +270,74 @@ constexpr auto checkTrie(
   );
  }
 
+ using EmptyString = decltype(string_t<FixedString<1>("")>());
+
  // An entry.
- template<std::size_t Index, FixedString<1>>
- auto transitionAdd(nil = nil()) -> Transition<-1, int_c<Index>>
+ // template<std::size_t Index, typename T2, typename=detail::Specialize<std::is_same_v<T2, void>>>
+ template<std::size_t Index>
+ constexpr auto transitionAdd(nil, EmptyString str) -> Transition<-1, int_c<Index>>
  { 
+  // std::cout << "Adding last transition, Index: " << Index << '\n';
   return {}; 
  }
 
- template <std::size_t Index, FixedString String1>
- auto transitionAdd(nil = nil()) -> Transition<String1.Head(), TrieNode<decltype(transitionAdd<Index, String1.Tail()>(nil()))>>
+ template <std::size_t Index, class String>
+ constexpr auto transitionAdd(nil, String&& str) 
+ // -> Transition<String::Head(), TrieNode<decltype(transitionAdd<Index>(nil(), String::Tail()))>>
+// -> Transition<String::Head(), TrieNode<decltype(transitionAdd<Index>(nil(), typename String::Tail()))>>
  { 
-  return {};
+  // std::cout << "New transition: Letter: " << String::Head() << ", Index" << Index << '\n';
+  return Transition<String::Head(), TrieNode<decltype(transitionAdd<Index>(nil(), typename String::Tail()))>>{};
+  // return {};
  }
 
  // Casse for reaching the end of the string and 
  // there is no transition at the current position.
  template <
   unsigned int Index,
-  FixedString String1,
+  class String,
   typename... Prefixes,
   typename... Transitions,
-  typename = detail::Specialize<(String1.Empty() || sizeof...(Transitions) == 0)> 
+  typename = detail::Specialize<(String::Empty() || sizeof...(Transitions) == 0)> 
 >
-constexpr auto insertSorted(nil, TrieNode<Prefixes...>, Transitions...)
--> TrieNode<Prefixes...,decltype(transitionAdd<Index, String1>(nil())),Transitions...>
+constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transitions...)
+-> TrieNode<Prefixes...,decltype(transitionAdd<Index>(nil(), std::move(str))),Transitions...>
 { 
+  // std::cout << "insertSorted(1), Index: " << Index << ", Adding new transition... STRING: " << String::Data() << "\n";
+  // transitionAdd<Index>(nil(), std::move(str));
+  // return TrieNode<Prefixes...,decltype(transitionAdd<Index>(nil(), std::move(str))),Transitions...>();
   return {};
 }
 
-template<std::size_t Index, FixedString String1, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = detail::Specialize<(Ch > String1.Head())>>
-constexpr auto insertSorted(nil, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
--> TrieNode<Prefixes..., decltype(transitionAdd<Index, String1>(nil())), Transition<Ch, Next>, Transitions...>
+template<std::size_t Index, class String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = detail::Specialize<(Ch > String::Head())>>
+constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
+// -> TrieNode<Prefixes..., decltype(transitionAdd<Index, String>(nil())), Transition<Ch, Next>, Transitions...>
+-> TrieNode<Prefixes..., decltype(transitionAdd<Index>(nil(), std::move(str))), Transition<Ch, Next>, Transitions...>
 {
+  // std::cout << "insertSorted(2), Index: " << Index << ", Ch: " << Ch << ", Head: " << String::Head() << '\n';
+  // return TrieNode<Prefixes..., decltype(transitionAdd<Index>(nil(), std::move(str))), Transition<Ch, Next>, Transitions...>{};
   return {};
 }
 
-template<std::size_t Index, FixedString String, typename... Transitions>
-constexpr auto trieAdd(TrieNode<Transitions...>)
--> decltype(insertSorted<Index, String>(nil(), TrieNode<>(), Transitions()...))
+template<std::size_t Index, typename String, typename... Transitions>
+constexpr auto trieAdd(TrieNode<Transitions...>, String&& str)
+-> decltype(insertSorted<Index>(nil(), std::move(str), TrieNode<>(), Transitions()...))
 {
+  // std::cout << "trieAdd: Index: " << Index << ", String: " << String::Data() << '\n';
+  // return insertSorted<Index>(nil(), std::move(str), TrieNode<>(), Transitions()...);
   return {};
 }
 
-template<std::size_t Index, FixedString String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = detail::Specialize<(Ch==String.Head())>>
-constexpr auto insertSorted(nil, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
--> TrieNode<Prefixes..., Transition<Ch, decltype(trieAdd<Index, String.Back()>(Next()))>, Transitions...>
+template<std::size_t Index, class String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = detail::Specialize<(Ch==String::Head())>>
+constexpr auto insertSorted(nil, String&&, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
+-> TrieNode<Prefixes..., Transition<Ch, decltype(trieAdd<Index>(Next(), typename String::Tail()))>, Transitions...>
 {
  return {};
 }
 
-template<std::size_t Index, FixedString String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = detail::Specialize<(Ch<String.Head())>>
-constexpr auto insertSorted(nil, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
--> decltype(insertSorted<Index, String>(nil(), TrieNode<Prefixes..., Transition<Ch, Next>>(), Transitions()...))
+template<std::size_t Index, class String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = detail::Specialize<(Ch<String::Head())>>
+constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
+-> decltype(insertSorted<Index, String>(nil(), std::move(str), TrieNode<Prefixes..., Transition<Ch, Next>>(), Transitions()...))
 {
  return {};
 }
@@ -398,29 +438,79 @@ constexpr auto insertSorted(nil, TrieNode<Prefixes...>, Transition<Ch, Next>, Tr
 template<std::size_t I>
 constexpr TrieNode<> makeTrie(nil=nil()) 
 { 
-  std::cout << "End: " << I << '\n';
+  // std::cout << "End: " << I << '\n';
   return {}; 
 }
 
-template <std::size_t I, FixedString String0, FixedString...  Strings>
-constexpr auto makeTrie(nil=nil()) 
+template <std::size_t I, class String, typename... Strings>
+constexpr auto makeTrie(nil, String&& str, Strings&&... strs) 
+-> decltype(trieAdd<I>(makeTrie<I+1>(nil(), std::forward<Strings>(strs)...), std::move(str)))
 {
-  // std::cout << "[START] Index: " << I << " " << String0.val << '\n';
-  // std::cout << "[MAKETRIE] Index: " << I << " " << String0.val << '\n';
-  auto trie = makeTrie<I+1, Strings...>();
-  // std::cout << "[TRIEADD] Index: " << I << " " << String0.val << '\n';
-  auto what = trieAdd<I, String0>(trie);
-  // std::cout << "[END] Index: " << I << " " << String0.val << '\n';
-  return what;
+ return {};
 }
+
+// template <std::size_t I, typename String0, typename... Strings>
+// constexpr auto makeTrie(nil=nil()) 
+// -> decltype(trieAdd<I, String0&&>(makeTrie<I+1, Strings&&...>()))
+// {
+//   return {};
+// }
 
 } // namespace cpp20trie
 
 
+namespace pack_tools {
+
+namespace detail {
+  template <unsigned int> struct int_c {};
+
+  template <unsigned int I>
+  constexpr void *get_index_impl(int_c<I>) // invalid index
+  {
+    return {};
+  }
+
+  template <typename T0,typename... Ts>
+  constexpr T0&& get_index_impl(int_c<0>,T0&& t0,Ts&&... ts)
+  {
+    return (T0&&)t0;
+  }
+
+  template <unsigned int I,typename T0,typename... Ts>
+  constexpr auto get_index_impl(int_c<I>,T0&& t0,Ts&&... ts)
+    -> decltype(get_index_impl(int_c<I-1>(),(Ts&&)ts...))
+  {
+    return get_index_impl(int_c<I-1>(),(Ts&&)ts...);
+  }
+} // namespace detail
+
+template <unsigned int I,typename... Ts>
+constexpr auto get_index(Ts&&... ts)
+  -> decltype(detail::get_index_impl(detail::int_c<I>(),(Ts&&)ts...))
+{
+  static_assert((I<sizeof...(Ts)),"Invalid Index");
+  return detail::get_index_impl(detail::int_c<I>(),(Ts&&)ts...);
+}
+
+} // namespace pack_tools
+
+
+template<typename... Strings>
+auto lol(Strings&&... strs) {
+ std::cout << pack_tools::get_index<0>(strs...).val << '\n';
+}
 
 namespace detail 
 {
-  template<unsigned int... Is,
+
+ template<typename... Strings>
+ constexpr auto makeTrieFromStrings(Strings&&... strings)
+ {
+  return cpp20trie::makeTrie<0>(cpp20trie::nil(), strings...);
+  // return {};
+ }
+
+  template<unsigned long... Is,
            typename ArgE,
            typename... Args>
   constexpr auto doTrie(std::index_sequence<Is...>,
@@ -429,7 +519,27 @@ namespace detail
                         Args&&...        args
   ) -> decltype(argE())
  {
+  return cpp20trie::checkTrie(
+   cpp20trie::makeTrie<0>(cpp20trie::nil(), pack_tools::get_index<(2*Is)>(std::forward<Args>(args)...)...), 
+   std::move(str), 
+   std::move(argE),
+   pack_tools::get_index<Is*2+1>(std::forward<Args>(args)...)...
+  );
  }
+
+ //  template<unsigned long... Is,
+ //           typename ArgE,
+ //           typename... Args>
+ //  auto doTrieHelper(std::index_sequence<Is...>,
+ //                        std::string_view str,
+ //                        ArgE&&           argE,
+ //                        Args&&...        args
+ //  ) -> decltype(argE())
+ // {
+ //  lol(pack_tools::get_index<(2*Is)>(std::forward<Args>(args)...)...);
+
+ //  return argE();
+ // }
 } // namespace detail
 
 template<typename ArgE, typename... Args>
@@ -438,34 +548,69 @@ constexpr auto doTrie(std::string_view str, ArgE&& argE, Args&&... args)
 {
  return detail::doTrie(
   std::make_index_sequence<sizeof...(args)/2>(),
-  str,
+  std::move(str),
   std::move(argE),            // Default case (error)
   std::forward<Args>(args)... // Branches.
  );
 }
 
-template <FixedString... Strings>
-constexpr auto makeTrie() 
+template <class... Strings>
+auto makeTrie(Strings&&... strings) 
 {
- return cpp20trie::makeTrie<0, Strings...>();
+ return cpp20trie::makeTrie<0>(cpp20trie::nil(), std::forward<Strings>(strings)...);
 }
 
 auto main() -> int
 {
- auto v = cpp20trie::Switch(
-  'y', 
-  "ang",
-  // cpp20trie::TrieNode<
-  //  decltype(cpp20trie::transitionAdd<0, "hello">()),
-  //  decltype(cpp20trie::transitionAdd<1, "that is so awesome">()),
-  //  decltype(cpp20trie::transitionAdd<2, "alex so awesome">())
-  // >{},
-  makeTrie<"lol", "yang">(),
-  []{ return "not found"; },
-  []{ return "why"; },
-  []{ return "yang"; }
- );
+ // auto v = cpp20trie::Switch(
+ //  'y', 
+ //  "ang",
+ //  // cpp20trie::TrieNode<
+ //  //  decltype(cpp20trie::transitionAdd<0, "hello">()),
+ //  //  decltype(cpp20trie::transitionAdd<1, "that is so awesome">()),
+ //  //  decltype(cpp20trie::transitionAdd<2, "alex so awesome">())
+ //  // >{},
+ //  makeTrie<"lol", "yang">(),
+ //  []{ return "not found"; },
+ //  []{ return "why"; },
+ //  []{ return "yang"; }
+ // );
 
- std::cout << "Result: " << v << '\n';
+ // std::cout << "Result: " << v << '\n';
 
+ // doTrie("hello", [&]{ return 0; }, 
+ //  FixedString("hello"), [&]{ return 1;},
+ //  FixedString("lol"), [&]{ return 2;} 
+ //  );
+
+ // auto what = make_string_t<FixedString("Hello"), FixedString("Hello").Size()>::type();
+ // std::cout << string_t<"Hello">::tail::da << '\n';
+ // makeTrie(string_t<"Hello">());
+
+ #define TRIE(str) doTrie(str, [&]
+ #define CASE(str) ,string_t<str>(), [&]
+ #define ENDTRIE );
+
+ #define TEST(str) CASE(str) { return str; }
+
+ // auto res = doTrie(
+ //  "why",
+ //  [&]{ return 0;}, 
+ //  string_t<"why">(),
+ //  [&]{ return 1;},
+ //  string_t<"lhat">(),
+ //  [&]{ return 2;}
+ // );
+
+ constexpr auto v = doTrie ( "why" , [ & ] {
+  return "Nothing found.";
+ }
+ TEST("what")
+ TEST("hello")
+ TEST("why")
+ ENDTRIE;
+
+ std::cout << "Found: " << v << '\n';
+
+ // std::cout << "Result: " << res << '\n';
 }
