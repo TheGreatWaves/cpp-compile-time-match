@@ -204,7 +204,7 @@ constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transition
 }
 
 template <std::size_t Index, class String, typename... Prefixes, int Ch, typename Next,
-          typename... Transitions, typename = detail::Specialize<(Ch > String::Head())>>
+          typename... Transitions, typename = detail::Specialize<(Ch != String::Head())>>
 constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transition<Ch, Next>,
                             Transitions...)
     noexcept -> TrieNode<Prefixes..., decltype(transitionAdd<Index>(nil(), std::move(str))),
@@ -227,17 +227,6 @@ constexpr auto insertSorted(nil, String&&, TrieNode<Prefixes...>, Transition<Ch,
     noexcept -> TrieNode<Prefixes...,
                 Transition<Ch, decltype(trieAdd<Index>(Next(), typename String::Tail()))>,
                 Transitions...>
-{
-    return {};
-}
-
-template <std::size_t Index, class String, typename... Prefixes, int Ch, typename Next,
-          typename... Transitions, typename = detail::Specialize<(Ch < String::Head())>>
-constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transition<Ch, Next>,
-                            Transitions...)
-    noexcept -> decltype(insertSorted<Index, String>(nil(), std::move(str),
-                                            TrieNode<Prefixes..., Transition<Ch, Next>>(),
-                                            Transitions()...))
 {
     return {};
 }
@@ -338,7 +327,7 @@ auto main() -> int
 
     if constexpr (std::string_view("Test passed.") == v4)
     {
-        std::cout << "Test passed!\n";
+        std::cout << "Test 1 passed!\n";
     }
     else
     {
