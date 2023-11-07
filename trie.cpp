@@ -345,5 +345,13 @@ auto main() -> int
         std::cout << "Test failed\n";
     }
 
+    auto success_message = "";
+    TRIE("Test") { success_message = "Test 2 failed, something went wrong."; }
+    CASE("Test") { success_message = "Test 2 passed!"; }
+    ENDTRIE;
+
+    std::cout << success_message << '\n';
+    
+
     return 0;
 }
