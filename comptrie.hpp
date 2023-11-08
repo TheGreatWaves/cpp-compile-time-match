@@ -151,10 +151,16 @@ namespace cpp20trie
         constexpr auto compile_switch(std::size_t index, Characters&& chars, std::index_sequence<Is...>, Function&& func, DefaultFunction&& def)
         noexcept -> decltype(def())
         {
-            using returnType = decltype(def());
-            returnType ret   = def();
-            std::initializer_list<int>({ (index == std::get<Is>(std::move(chars)) ? (ret = func.template operator()<Is>()), 0 : 0)...} );
-            return ret;
+            if constexpr (!std::is_same_v<decltype(def()), void>)
+            {
+                auto ret = def();
+                std::initializer_list<int>({ (index == std::get<Is>(std::move(chars)) ? (ret = func.template operator()<Is>()), 0 : 0)...} );
+                return ret;
+            }
+            else
+            {
+                std::initializer_list<int>({ (index == std::get<Is>(std::move(chars)) ? (func.template operator()<Is>()), 0 : 0)...} );
+            }
         }
 
         template <typename TransitionTuple, typename CharacterTuple, std::size_t... Cs, typename FnE, typename... Fns>
