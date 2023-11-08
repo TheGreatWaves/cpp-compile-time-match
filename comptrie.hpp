@@ -1,5 +1,4 @@
- /** 
- * MIT License
+ /**  * MIT License
  * 
  * Copyright (c) 2016 Tobias Hoffmann
  *
@@ -95,7 +94,7 @@ namespace cpp20trie
         noexcept -> decltype(fne())
         {
             return (!str.empty())
-                 ? Switch(str[0], str.substr(1), trie, std::move(fne), std::forward<Fns>(fns)...)
+                 ? string_switch(str[0], str.substr(1), trie, std::move(fne), std::forward<Fns>(fns)...)
                  : fne();
         }
 
@@ -192,35 +191,35 @@ namespace cpp20trie
         // Casse for reaching the end of the string and
         // there is no transition at the current position.
         template <unsigned int Index, class String, typename... Prefixes, typename... Transitions, typename = Specialize<(String::empty() || sizeof...(Transitions) == 0)>>
-        constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transitions...)
+        constexpr auto insert_sorted(nil, String&& str, TrieNode<Prefixes...>, Transitions...)
         noexcept -> TrieNode<Prefixes..., decltype(transition_add<Index>(nil(), std::move(str))), Transitions...>
         {
             return {};
         }
 
         template <std::size_t Index, class String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = Specialize<(Ch != String::head())>>
-        constexpr auto insertSorted(nil, String&& str, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
+        constexpr auto insert_sorted(nil, String&& str, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
         noexcept -> TrieNode<Prefixes..., decltype(transition_add<Index>(nil(), std::move(str))), Transition<Ch, Next>, Transitions...>
         {
             return {};
         }
 
         template <std::size_t Index, typename String, typename... Transitions>
-        constexpr auto trieAdd(TrieNode<Transitions...>, String&& str)
-        noexcept -> decltype(insertSorted<Index>(nil(), std::move(str), TrieNode<>(), Transitions()...))
+        constexpr auto trie_add(TrieNode<Transitions...>, String&& str)
+        noexcept -> decltype(insert_sorted<Index>(nil(), std::move(str), TrieNode<>(), Transitions()...))
         {
             return {};
         }
 
         template <std::size_t Index, class String, typename... Prefixes, int Ch, typename Next, typename... Transitions, typename = Specialize<(Ch == String::head())>>
-        constexpr auto insertSorted(nil, String&&, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
-        noexcept -> TrieNode<Prefixes..., Transition<Ch, decltype(trieAdd<Index>(Next(), typename String::tail()))>, Transitions...>
+        constexpr auto insert_sorted(nil, String&&, TrieNode<Prefixes...>, Transition<Ch, Next>, Transitions...)
+        noexcept -> TrieNode<Prefixes..., Transition<Ch, decltype(trie_add<Index>(Next(), typename String::tail()))>, Transitions...>
         {
             return {};
         }
 
         template <typename... Transitions, typename FnE, typename... Fns>
-        constexpr auto Switch(unsigned char ch, std::string_view str, TrieNode<Transitions...> t, FnE&& fne, Fns&&... fns) 
+        constexpr auto string_switch(unsigned char ch, std::string_view str, TrieNode<Transitions...> t, FnE&& fne, Fns&&... fns) 
         noexcept -> decltype(fne())
         {
              return detail::switch_impl(static_cast<std::size_t>(ch), 
@@ -234,24 +233,24 @@ namespace cpp20trie
 
         // Making the trie.
         template <std::size_t I>
-        constexpr auto makeTrie(nil = nil()) noexcept -> TrieNode<>
+        constexpr auto make_trie(nil = nil()) noexcept -> TrieNode<>
         {
             return {};
         }
 
         template <std::size_t I, class String, typename... Strings>
-        constexpr auto makeTrie(nil, String&& str, Strings&&... strs)
-        noexcept -> decltype(trieAdd<I>(makeTrie<I + 1>(nil(), std::forward<Strings>(strs)...), std::move(str)))
+        constexpr auto make_trie(nil, String&& str, Strings&&... strs)
+        noexcept -> decltype(trie_add<I>(make_trie<I + 1>(nil(), std::forward<Strings>(strs)...), std::move(str)))
         {
             return {};
         }
 
         template <unsigned long... Is, typename ArgE, typename... Args>
-        constexpr auto doTrie(std::index_sequence<Is...>, std::string_view str, ArgE&& argE, Args&&... args)
+        constexpr auto do_trie(std::index_sequence<Is...>, std::string_view str, ArgE&& argE, Args&&... args)
         noexcept -> decltype(argE())
         {
             return check_trie(
-                makeTrie<0>(nil(),std::get<(2 * Is)>(std::make_tuple(std::forward<Args>(args)...))...),
+                make_trie<0>(nil(),std::get<(2 * Is)>(std::make_tuple(std::forward<Args>(args)...))...),
                 std::move(str), std::move(argE),
                 std::get<(Is * 2 + 1)>(std::make_tuple(std::forward<Args>(args)...))...);
         }
@@ -264,37 +263,37 @@ namespace cpp20trie
      * Example:
      * 
      *  using HelloString = cpp20trie::FixedString<"Hello">;
-     *  - HelloString::Data()       -> "Hello"
+     *  - HelloString::data()       -> "Hello"
      *  - HelloString::head()       -> 'H'
-     *  - HelloString::tail::Data() -> "ello"
+     *  - HelloString::tail::data() -> "ello"
      * 
      * template <class String>
      * constexpr auto print_string(String&& str) -> void
      * {
-     *     std::cout << String::Data() << '\n';
+     *     std::cout << String::data() << '\n';
      * }
      */
     template <detail::FixedString String>
     struct FixedString
     {
         static constexpr auto size() noexcept -> int { return String.size(); }
-        static constexpr auto Data() noexcept -> const char* { return String.val; }
+        static constexpr auto data() noexcept -> const char* { return String.val; }
         static constexpr auto head() noexcept -> char { return String.head(); }
         static constexpr auto empty() noexcept -> bool { return String.empty(); }
         using tail = FixedString<String.tail()>;
     };
 
     template <typename ArgE, typename... Args>
-    constexpr auto doTrie(std::string_view str, ArgE&& argE, Args&&... args) noexcept -> decltype(argE())
+    constexpr auto do_trie(std::string_view str, ArgE&& argE, Args&&... args) noexcept -> decltype(argE())
     {
-        return detail::doTrie(std::make_index_sequence<sizeof...(args) / 2>(), 
+        return detail::do_trie(std::make_index_sequence<sizeof...(args) / 2>(), 
                               std::move(str),
                               std::move(argE),            // Default case (error)
                               std::forward<Args>(args)... // Branches.
         );
     }
 
-    #define TRIE(str) doTrie(str, [&] {
+    #define TRIE(str) do_trie(str, [&] {
     #define CASE(str) }, cpp20trie::FixedString<str>(), [&] {
     #define ENDTRIE });
 
