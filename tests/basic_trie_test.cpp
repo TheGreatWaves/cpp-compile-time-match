@@ -8,37 +8,37 @@
 auto main() -> int
 {
     constexpr auto v = 
-    TRIE("Start") 
+    MATCH("Start") 
         return "Fail"; 
     FAIL("Foo")
     FAIL("Bar")
     FAIL("John")
     PASS("Start", "123k")
-    ENDTRIE;
+    ENDMATCH;
 
     constexpr auto v2 = 
-    TRIE(v) { return "Fail"; }
+    MATCH(v) { return "Fail"; }
     FAIL("Foo")
     FAIL("Bar")
     FAIL("John")
     PASS("123k", "...")
-    ENDTRIE;
+    ENDMATCH;
 
     constexpr auto v3 = 
-    TRIE(v2) { return "Fail"; }
+    MATCH(v2) { return "Fail"; }
     FAIL("Foo")
     FAIL("Bar")
     FAIL("John")
     PASS("...", "kj234n231jbsjkvjkh sd")
-    ENDTRIE;
+    ENDMATCH;
 
     constexpr auto v4 = 
-    TRIE(v3) { return "Fail"; }
+    MATCH(v3) { return "Fail"; }
     FAIL("Foo")
     FAIL("Bar")
     FAIL("John")
     PASS("kj234n231jbsjkvjkh sd", "Test passed.")
-    ENDTRIE;
+    ENDMATCH;
 
     if constexpr (std::string_view("Test passed.") == v4)
     {
@@ -50,9 +50,9 @@ auto main() -> int
     }
 
     auto success_message = "";
-    TRIE("Test") { success_message = "Test 2 failed, something went wrong."; }
+    MATCH("Test") { success_message = "Test 2 failed, something went wrong."; }
     CASE("Test") { success_message = "Test 2 passed!"; }
-    ENDTRIE;
+    ENDMATCH;
 
     std::cout << success_message << '\n';
 

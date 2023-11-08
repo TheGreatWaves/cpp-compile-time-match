@@ -324,9 +324,9 @@ namespace cpp20trie
         );
     }
 
-    #define TRIE(str) do_trie(str, [&] {
+    #define MATCH(str) do_trie(str, [&] {
     #define CASE(str) }, cpp20trie::FixedString<str>(), [&] {
-    #define ENDTRIE });
+    #define ENDMATCH });
 
 } // namespace cpp20trie
 
