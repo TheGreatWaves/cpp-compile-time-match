@@ -28,6 +28,7 @@
 #define COMPILE_TIME_TRIE_H
 
 #include <algorithm>
+#include <string_view>
 #include <tuple>
 
 namespace cpp20trie

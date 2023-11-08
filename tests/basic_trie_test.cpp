@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "../comptrie.hpp"
 
 #define FAIL(str) CASE(str) return "Fail";
