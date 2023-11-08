@@ -27,7 +27,6 @@
 #ifndef COMPILE_TIME_TRIE_H
 #define COMPILE_TIME_TRIE_H
 
-#include <iostream>
 #include <algorithm>
 #include <tuple>
 
@@ -159,7 +158,9 @@ namespace cpp20trie
             }
             else
             {
-                std::initializer_list<int>({ (index == std::get<Is>(std::move(chars)) ? (func.template operator()<Is>()), 0 : 0)...} );
+                auto found = false;
+                std::initializer_list<int>({ (index == std::get<Is>(std::move(chars)) ? found=true, (func.template operator()<Is>()), 0 : 0)...} );
+                if (!found) def();
             }
         }
 
