@@ -14,6 +14,11 @@
 String matching is a fundamental technique used in virtually all software development. In C++, the absence of a [switch-case](https://www.programiz.com/c-programming/c-switch-case-statement) construct for strings often leads developers to resort to alternatives such as if-else chains or mapping strings using data structures like maps or hash tables. However, these band-aid solutions come with their own set of problems: introducing long if-else chains can be error-prone, terrible for performance, and it hurts readability and maintainability, while using a map can introduce new complexities and unnecessary overhead for the programmer.
 
 # Usage
+
+> [!WARNING]
+> There is no free lunch. Costs which you do not need to pay for during run-time still needs to be paid for during compile time.
+> Beware of adding too many entries. Code size and compile time may be greatly affected.
+
 ```cpp
 // The only header you need.
 #include "comptrie.hpp"
