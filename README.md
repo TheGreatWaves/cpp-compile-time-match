@@ -16,7 +16,7 @@ String matching is a fundamental technique used in virtually all software develo
 # Usage
 
 > [!WARNING]
-> There is no free lunch. Costs which you do not need to pay for during run-time still needs to be paid for during compile time.
+> There is no free lunch. Costs which you do not need to pay for during run-time still needs to be paid for during compile-time.
 > Beware of adding too many entries. Code size and compile time may be greatly affected.
 
 ```cpp
