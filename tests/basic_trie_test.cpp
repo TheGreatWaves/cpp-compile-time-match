@@ -27,7 +27,9 @@ auto main() -> int
     constexpr auto v3 = 
     MATCH(v2) { return "Fail"; }
     FAIL("Foo")
+    FAIL("Flew")
     FAIL("Bar")
+    FAIL("By")
     FAIL("John")
     PASS("...", "kj234n231jbsjkvjkh sd")
     ENDMATCH;
@@ -35,8 +37,11 @@ auto main() -> int
     constexpr auto v4 = 
     MATCH(v3) { return "Fail"; }
     FAIL("Foo")
+    FAIL("Few")
     FAIL("Bar")
+    FAIL("Bore")
     FAIL("John")
+    FAIL("James")
     PASS("kj234n231jbsjkvjkh sd", "Test passed.")
     ENDMATCH;
 
